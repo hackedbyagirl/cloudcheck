@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+
+import argparse
 import sys
 import json
 import traceback
@@ -5,6 +8,7 @@ from threading import Lock
 from datetime import datetime
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 from .providers import *
 from .helpers import ip_network_parents
@@ -36,7 +40,6 @@ class CloudProviders:
         try:
             provider = p(*args, **kwargs)
             self.providers[provider.name] = provider
-            # if we successfully got CIDR ranges, then update the JSON
             if not provider.name in self.json:
                 self.json[provider.name] = {}
             json_ranges = self.json[provider.name].get("cidrs", [])
@@ -84,20 +87,49 @@ def refresh_json():
         json.dump(providers.json, f, sort_keys=True, indent=4)
 
 
+def read_file(file_path):
+    with open(file_path, 'r') as f:
+        return [line.strip() for line in f]
+
+
 def main():
-    ips = sys.argv[1:]
-    if not ips:
-        print("usage: cloudcheck 1.2.3.4 [refresh_json | [ips...]]")
-    elif len(ips) == 1 and ips[0].lower() == "refresh_json":
-        refresh_json()
-        return
+    parser = argparse.ArgumentParser(description='Cloud IP checker.')
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('-f', '--file', help='File containing IPs to check.')
+    group.add_argument('-H', '--host', help='Single host IP to check.')
+    parser.add_argument('-o', '--output', help='Output file to save data.')
+    args = parser.parse_args()
+
+    if args.file:
+        ips = read_file(args.file)
+    else:
+        ips = [args.host]
+
+    results = {
+        "cloud_hosts": [],
+        "non_cloud_hosts": []
+    }
+
     for ip in ips:
         provider, provider_type, subnet = check(ip)
         if provider:
-            print(f"{ip} belongs to {provider} ({provider_type}) ({subnet})")
+            results["cloud_hosts"].append({
+                "ip": ip,
+                "provider": provider,
+                "provider_type": provider_type,
+                "subnet": str(subnet)  # convert to string
+            })
         else:
-            print(f"{ip} is not listed as a cloud resource")
+            results["non_cloud_hosts"].append(ip)
 
+    print(json.dumps(results, indent=4))
+
+    if args.output:
+        with open(args.output, 'w') as f:
+            json.dump(results, f, indent=4)
+
+    for host in results["cloud_hosts"]:
+        print(f"{host['ip']} belongs to {host['provider']} ({host['provider_type']}) ({host['subnet']})")
 
 if __name__ == "__main__":
     main()
