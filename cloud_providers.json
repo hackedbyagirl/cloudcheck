@@ -16468,5 +16468,15 @@
         ],
         "last_updated": "2023-10-14T12:49:21.049800",
         "provider_type": "cloud"
+    },
+    "InternalNetworks": {
+        "cidrs": [
+            "10.0.0.0/8",
+            "172.16.0.0/12",
+            "192.168.0.0/16",
+            "fd00::/8"
+        ],
+        "last_updated": "2023-10-20T12:49:21.049800",
+        "provider_type": "internal"
     }
 }

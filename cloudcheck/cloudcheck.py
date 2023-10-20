@@ -83,7 +83,6 @@ def check(ip):
             providers = CloudProviders()
     return providers.check(ip)
 
-
 def refresh_json():
     global providers
     if providers is None:

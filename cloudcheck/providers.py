@@ -37,6 +37,7 @@ class CloudProvider:
             self.session = CachedSession(expire_after=cache_for, backend=backend)
             sessions[cache_for] = self.session
         self.ranges = CidrRanges(self.get_ranges())
+        log.debug(f"Fetched ranges for {self.name}: {self.ranges.cidrs}")
 
     def get_ranges(self):
         try:
@@ -168,3 +169,15 @@ class Github(CloudProvider):
                     except ValueError:
                         pass
         return ranges
+
+class InternalIP(CloudProvider):
+    provider_type = "internal"
+    
+    def get_ranges(self):
+        # Manually defined internal IP ranges
+        return [
+            '10.0.0.0/8',  # Class A
+            '172.16.0.0/12',  # Class B
+            '192.168.0.0/16'  # Class C
+        ]
+
