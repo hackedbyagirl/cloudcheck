@@ -1,24 +1,29 @@
 #!/usr/bin/env python3
 
+# Standard Library Imports
 import argparse
-import sys
 import json
+import logging
 import traceback
-from threading import Lock
-from datetime import datetime
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
+from threading import Lock
 
+# Third-party Imports
+# (if there are any)
+
+# Internal Imports
 from .providers import *
 from .helpers import ip_network_parents
 
-import logging
+# Constants
+JSON_PATH = Path(__file__).parent.parent / "cloud_providers.json"
+LOG = logging.getLogger("cloudcheck")
 
-log = logging.getLogger("cloudcheck")
-
-
-json_path = Path(__file__).parent.parent / "cloud_providers.json"
+# Initialize logging (example)
+logging.basicConfig(level=logging.INFO)
 
 
 class CloudProviders:
@@ -87,12 +92,39 @@ def refresh_json():
         json.dump(providers.json, f, sort_keys=True, indent=4)
 
 
+class ResultsProcessor:
+    def __init__(self):
+        self.results = {
+            "cloud_hosts": [],
+            "non_cloud_hosts": []
+        }
+
+    def process(self, ip, provider, provider_type, subnet):
+        if provider:
+            self.results["cloud_hosts"].append({
+                "ip": ip,
+                "provider": provider,
+                "provider_type": provider_type,
+                "subnet": str(subnet)
+            })
+        else:
+            self.results["non_cloud_hosts"].append(ip)
+
+    def save_to_file(self, output_path):
+        with open(output_path, 'w') as f:
+            json.dump(self.results, f, indent=4)
+
+    def display(self):
+        print(json.dumps(self.results, indent=4))
+
+
 def read_file(file_path):
     with open(file_path, 'r') as f:
         return [line.strip() for line in f]
 
 
 def main():
+    # Argument Parsing
     parser = argparse.ArgumentParser(description='Cloud IP checker.')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('-f', '--file', help='File containing IPs to check.')
@@ -100,36 +132,20 @@ def main():
     parser.add_argument('-o', '--output', help='Output file to save data.')
     args = parser.parse_args()
 
-    if args.file:
-        ips = read_file(args.file)
-    else:
-        ips = [args.host]
+    # Initialize Results Processor
+    results_processor = ResultsProcessor()
 
-    results = {
-        "cloud_hosts": [],
-        "non_cloud_hosts": []
-    }
-
+    # Process IPs
+    ips = read_file(args.file) if args.file else [args.host]
     for ip in ips:
         provider, provider_type, subnet = check(ip)
-        if provider:
-            results["cloud_hosts"].append({
-                "ip": ip,
-                "provider": provider,
-                "provider_type": provider_type,
-                "subnet": str(subnet)  # convert to string
-            })
-        else:
-            results["non_cloud_hosts"].append(ip)
+        results_processor.process(ip, provider, provider_type, subnet)
 
-    print(json.dumps(results, indent=4))
-
+    # Display and Save Results
+    results_processor.display()
     if args.output:
-        with open(args.output, 'w') as f:
-            json.dump(results, f, indent=4)
+        results_processor.save_to_file(args.output)
 
-    for host in results["cloud_hosts"]:
-        print(f"{host['ip']} belongs to {host['provider']} ({host['provider_type']}) ({host['subnet']})")
 
 if __name__ == "__main__":
     main()
